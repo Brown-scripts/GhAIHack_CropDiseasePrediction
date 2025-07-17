@@ -1,0 +1,9 @@
+.env
+REDIS_SETUP.md
+README.md
+run_tests.py
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
