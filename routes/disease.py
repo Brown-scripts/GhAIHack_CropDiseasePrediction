@@ -1,6 +1,5 @@
 """
 Disease information API endpoints
-Provides detailed information about crop diseases, symptoms, and basic treatment info
 """
 from fastapi import APIRouter, HTTPException, Query, Path
 from typing import List, Optional, Dict, Any
@@ -94,9 +93,14 @@ async def get_disease_symptoms(
         # Get disease info
         disease_info = treatment_service.get_disease_info(disease_key)
         if not disease_info:
+            suggestions = treatment_service.get_disease_suggestions(disease_name)
+            suggestion_text = ""
+            if suggestions:
+                suggestion_text = f" Did you mean: {', '.join(suggestions[:3])}?"
+
             raise HTTPException(
                 status_code=404,
-                detail=f"Disease not found: {disease_name}"
+                detail=f"Disease not found: {disease_name}.{suggestion_text} Use GET /diseases to see all supported diseases."
             )
 
         # Prepare response
@@ -140,9 +144,15 @@ async def get_complete_disease_info(
         # Get disease info
         disease_info = treatment_service.get_disease_info(disease_key)
         if not disease_info:
+            # Get suggestions for similar disease names
+            suggestions = treatment_service.get_disease_suggestions(disease_name)
+            suggestion_text = ""
+            if suggestions:
+                suggestion_text = f" Did you mean: {', '.join(suggestions[:3])}?"
+
             raise HTTPException(
                 status_code=404,
-                detail=f"Disease not found: {disease_name}"
+                detail=f"Disease not found: {disease_name}.{suggestion_text} Use GET /diseases to see all supported diseases."
             )
 
         logger.info(f"Complete disease info for {disease_name} retrieved successfully")

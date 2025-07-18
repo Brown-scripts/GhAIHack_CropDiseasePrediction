@@ -1,6 +1,5 @@
 """
 Supplier location API endpoints
-Provides information about nearby agricultural suppliers and their products
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
@@ -163,22 +162,7 @@ async def get_nearby_suppliers_by_coordinates(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/suppliers/products", response_model=List[str])
-async def get_available_products():
-    """Get list of available product types"""
-    products = [
-        "fertilizers",
-        "pesticides",
-        "fungicides",
-        "herbicides",
-        "insecticides",
-        "seeds",
-        "farm_tools",
-        "irrigation_equipment",
-        "organic_treatments",
-        "soil_amendments"
-    ]
-    return products
+
 
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

@@ -1,5 +1,5 @@
 """
-Configuration settings for the Crop Disease Treatment Recommendation API
+Configuration settings
 """
 import os
 from typing import List, Optional
@@ -80,22 +80,22 @@ class Settings(BaseSettings):
     )
     
     cashew_diseases: List[str] = Field(
-        default=["anthracnose", "gumosis", "healthy", "leaf_miner", "red_rust"],
+        default=["anthracnose", "gumosis", "leaf_miner", "red_rust", "healthy"],
         description="Supported cashew diseases"
     )
-    
+
     cassava_diseases: List[str] = Field(
-        default=["bacterial_blight", "brown_spot", "green_mite", "healthy", "mosaic"],
+        default=["bacterial_blight", "brown_spot", "green_mite", "mosaic", "healthy"],
         description="Supported cassava diseases"
     )
-    
+
     maize_diseases: List[str] = Field(
-        default=["fall_armyworm", "grasshopper", "healthy", "leaf_beetle", "leaf_blight", "leaf_spot", "streak_virus"],
+        default=["fall_armyworm", "grasshopper", "leaf_beetle", "leaf_blight", "leaf_spot", "streak_virus", "healthy"],
         description="Supported maize diseases"
     )
-    
+
     tomato_diseases: List[str] = Field(
-        default=["healthy", "leaf_blight", "leaf_curl", "septoria_leaf_spot", "verticillium_wilt"],
+        default=["leaf_blight", "leaf_curl", "septoria_leaf_spot", "verticillium_wilt", "healthy"],
         description="Supported tomato diseases"
     )
 

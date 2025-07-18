@@ -1,6 +1,5 @@
 """
 Crop Disease Treatment Recommendation API
-Main application entry point
 """
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +13,7 @@ from routes import recommend, disease, suppliers, prices
 from services.cache import init_cache, close_cache
 
 
-# Setup logging
+
 setup_logging()
 logger = get_logger("main")
 
@@ -22,25 +21,22 @@ logger = get_logger("main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
-    # Startup
     logger.info("Starting Crop Disease Treatment Recommendation API", extra={
         "version": settings.app_version,
         "debug": settings.debug
     })
 
-    # Initialize cache
     await init_cache()
     logger.info("Cache initialized")
 
     yield
 
-    # Shutdown
     logger.info("Shutting down Crop Disease Treatment Recommendation API")
     await close_cache()
     logger.info("Cache closed")
 
 
-# Create FastAPI app
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -49,7 +45,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -59,7 +55,7 @@ app.add_middleware(
 )
 
 
-# Add request timing middleware
+
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     start_time = time.time()
@@ -67,7 +63,7 @@ async def add_process_time_header(request: Request, call_next):
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
 
-    # Log request
+
     logger.info("Request processed", extra={
         "method": request.method,
         "url": str(request.url),
@@ -78,11 +74,11 @@ async def add_process_time_header(request: Request, call_next):
     return response
 
 
-# Include routers
-app.include_router(recommend.router, prefix="/api/v1", tags=["recommendations"])
-app.include_router(disease.router, prefix="/api/v1", tags=["diseases"])
-app.include_router(suppliers.router, prefix="/api/v1", tags=["suppliers"])
-app.include_router(prices.router, prefix="/api/v1", tags=["prices"])
+
+app.include_router(disease.router, prefix="/api", tags=["diseases"])
+app.include_router(recommend.router, prefix="/api", tags=["recommendations"])
+app.include_router(suppliers.router, prefix="/api", tags=["suppliers"])
+app.include_router(prices.router, prefix="/api", tags=["prices"])
 
 
 @app.get("/", tags=["health"])

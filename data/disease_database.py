@@ -1,6 +1,5 @@
 """
-Comprehensive disease database for crop disease treatment recommendations
-Contains detailed information about diseases, symptoms, treatments, and management strategies
+Disease database for crop disease treatment recommendations
 """
 from typing import Dict, List
 from models.request_models import DiseaseInfo, Treatment, TreatmentType, CropType

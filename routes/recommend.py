@@ -1,13 +1,12 @@
 """
-Comprehensive treatment recommendation API endpoints
-Main endpoint for getting complete disease treatment recommendations
+Treatment recommendation API endpoints
 """
 from fastapi import APIRouter, HTTPException, Path, Depends
 from typing import Optional
 import logging
 
 from config.logging import get_logger
-from config.settings import settings, get_crop_from_disease
+from config.settings import settings
 from models.request_models import (
     RecommendRequest, RecommendationResponse, SeverityLevel, ErrorResponse
 )
@@ -26,7 +25,7 @@ async def get_comprehensive_recommendations(
     request: RecommendRequest,
     disease_name: str = Path(..., description="Disease name")
 ):
-    """Get comprehensive treatment recommendations for a disease"""
+    """Get comprehensive treatment recommendations"""
     try:
         # Normalize disease name
         disease_key = disease_name.lower().strip()
@@ -125,30 +124,6 @@ async def get_comprehensive_recommendations(
         logger.error(f"Error generating recommendation for {disease_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@router.post("/recommend", response_model=RecommendationResponse)
-async def get_recommendations_legacy(request: RecommendRequest):
-    """Legacy endpoint for backward compatibility"""
-    try:
-        # Try to infer crop type from disease name
-        crop_type = get_crop_from_disease(request.disease)
-        if not crop_type:
-            # If we can't infer, try to find the disease anyway
-            disease_info = treatment_service.get_disease_info(request.disease)
-            if not disease_info:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Disease not found: {request.disease}. Please check the disease name or specify the crop type."
-                )
-
-        # Use the new comprehensive endpoint
-        return await get_comprehensive_recommendations(request, request.disease)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in legacy recommendation endpoint: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/recommend/quick/{disease_name}")
