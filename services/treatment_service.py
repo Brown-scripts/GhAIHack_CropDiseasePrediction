@@ -211,11 +211,12 @@ class TreatmentService:
                 max_budget = float(budget_range)
                 min_budget = 0
 
-            # Filter treatments within budget
+            # Filter treatments within budget - only apply upper limit
+            # Include all treatments that cost less than max_budget
             filtered = []
             for treatment in treatments:
                 if treatment.cost_estimate_ghs is not None:
-                    if min_budget <= treatment.cost_estimate_ghs <= max_budget:
+                    if treatment.cost_estimate_ghs <= max_budget:
                         filtered.append(treatment)
                 else:
                     # Include treatments without cost estimate
@@ -239,8 +240,7 @@ class TreatmentService:
         self,
         disease_name: str,
         severity: SeverityLevel = SeverityLevel.MODERATE,
-        organic_preference: bool = False,
-        budget_range: Optional[str] = None
+        organic_preference: bool = False
     ) -> List[Treatment]:
         """Get recommended treatments based on criteria"""
 
@@ -260,9 +260,7 @@ class TreatmentService:
                 bio_treatments = [t for t in treatments if t.type == TreatmentType.BIOLOGICAL]
                 treatments = organic_treatments + bio_treatments
 
-        # Filter by budget
-        if budget_range:
-            treatments = self.filter_treatments_by_budget(treatments, budget_range)
+
 
         # Sort by effectiveness and cost
         treatments.sort(key=lambda t: (-t.effectiveness, t.cost_estimate_ghs or 0))

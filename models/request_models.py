@@ -39,7 +39,6 @@ class RecommendRequest(BaseModel):
     crop_type: Optional[CropType] = Field(None, description="Crop type (optional, will be inferred from disease)")
     severity: Optional[SeverityLevel] = Field(SeverityLevel.MODERATE, description="Disease severity level")
     organic_preference: bool = Field(False, description="Prefer organic treatments")
-    budget_range: Optional[str] = Field(None, description="Budget range in GHS (e.g., '100-500')")
 
     @validator('disease')
     def validate_disease(cls, v):
@@ -60,7 +59,7 @@ class LocationRequest(BaseModel):
     """Request model for location-based queries"""
     latitude: float = Field(..., ge=-90, le=90, description="Latitude coordinate")
     longitude: float = Field(..., ge=-180, le=180, description="Longitude coordinate")
-    radius_km: Optional[int] = Field(10, ge=1, le=100, description="Search radius in kilometers")
+    radius_km: Optional[int] = Field(10, ge=1, le=1000, description="Search radius in kilometers")
 
 
 class PriceRequest(BaseModel):

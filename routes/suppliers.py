@@ -12,7 +12,7 @@ from models.request_models import (
 )
 from services.location_service import get_coordinates
 from services.overpass_service import find_nearby_shops
-from services.cache import get_cache, set_cache
+from services.cache import get_cache, set_cache, clear_cache_pattern
 
 logger = get_logger("suppliers_routes")
 router = APIRouter()
@@ -21,7 +21,7 @@ router = APIRouter()
 @router.get("/suppliers/nearby", response_model=SuppliersResponse)
 async def get_nearby_suppliers(
     location: str = Query(..., description="Location (e.g., 'Accra, Ghana')"),
-    radius_km: int = Query(10, ge=1, le=100, description="Search radius in kilometers"),
+    radius_km: int = Query(10, ge=1, le=1000, description="Search radius in kilometers"),
     product_type: Optional[str] = Query(None, description="Filter by product type (fertilizer, pesticide, etc.)"),
     verified_only: bool = Query(False, description="Show only verified suppliers")
 ):
@@ -47,6 +47,7 @@ async def get_nearby_suppliers(
         # Find nearby shops using Overpass API
         radius_meters = radius_km * 1000
         shops = find_nearby_shops(lat, lon, radius_meters)
+        logger.info(f"OSM returned {len(shops)} shops for location {lat},{lon} radius {radius_km}km")
         
         # Convert to Supplier objects and enhance with additional data
         suppliers = []
@@ -54,10 +55,16 @@ async def get_nearby_suppliers(
             supplier = Supplier(
                 name=shop.get("name", "Unknown Supplier"),
                 address=f"Lat: {shop.get('latitude', 'N/A')}, Lon: {shop.get('longitude', 'N/A')}",
+                phone=shop.get("phone"),  # May be None for OSM data
+                email=shop.get("email"),  # May be None for OSM data
                 latitude=shop.get("latitude"),
                 longitude=shop.get("longitude"),
                 distance_km=calculate_distance(lat, lon, shop.get("latitude", 0), shop.get("longitude", 0)),
-                products=get_supplier_products(shop.get("type", "")),
+                products=get_supplier_products(
+                    shop.get("type", ""),
+                    shop.get("product_hints", []),
+                    shop.get("name", "")
+                ),
                 verified=False  # Would be determined by database lookup
             )
             
@@ -73,12 +80,8 @@ async def get_nearby_suppliers(
         
         # Sort by distance
         suppliers.sort(key=lambda s: s.distance_km or float('inf'))
-        
-        # Add some mock verified suppliers for Ghana
-        if not suppliers or len(suppliers) < 3:
-            mock_suppliers = get_mock_ghana_suppliers(location, lat, lon)
-            suppliers.extend(mock_suppliers)
-            suppliers.sort(key=lambda s: s.distance_km or float('inf'))
+
+        logger.info(f"Final supplier count: {len(suppliers)} (OSM only, no mock data)")
         
         response = SuppliersResponse(
             location=location,
@@ -124,13 +127,19 @@ async def get_nearby_suppliers_by_coordinates(
             supplier = Supplier(
                 name=shop.get("name", "Unknown Supplier"),
                 address=f"Lat: {shop.get('latitude', 'N/A')}, Lon: {shop.get('longitude', 'N/A')}",
+                phone=shop.get("phone"),  # May be None for OSM data
+                email=shop.get("email"),  # May be None for OSM data
                 latitude=shop.get("latitude"),
                 longitude=shop.get("longitude"),
                 distance_km=calculate_distance(
-                    request.latitude, request.longitude, 
+                    request.latitude, request.longitude,
                     shop.get("latitude", 0), shop.get("longitude", 0)
                 ),
-                products=get_supplier_products(shop.get("type", "")),
+                products=get_supplier_products(
+                    shop.get("type", ""),
+                    shop.get("product_hints", []),
+                    shop.get("name", "")
+                ),
                 verified=False
             )
             
@@ -156,10 +165,22 @@ async def get_nearby_suppliers_by_coordinates(
         
         logger.info(f"Found {len(suppliers)} suppliers near coordinates")
         return response
-        
+
     except Exception as e:
         logger.error(f"Error finding suppliers by coordinates: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/cache/clear")
+async def clear_suppliers_cache():
+    """Clear all suppliers cache entries"""
+    try:
+        cleared_count = await clear_cache_pattern("suppliers:*")
+        logger.info(f"Cleared {cleared_count} supplier cache entries")
+        return {"message": f"Cleared {cleared_count} cache entries", "status": "success"}
+    except Exception as e:
+        logger.error(f"Error clearing cache: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear cache")
 
 
 
@@ -184,72 +205,92 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return round(c * r, 2)
 
 
-def get_supplier_products(shop_type: str) -> List[str]:
-    """Get products based on shop type"""
-    product_mapping = {
-        "agrarian": ["fertilizers", "pesticides", "seeds", "farm_tools"],
-        "farm": ["fertilizers", "pesticides", "seeds", "farm_tools", "irrigation_equipment"],
-        "pharmacy": ["pesticides", "fungicides", "herbicides"],
-        "hardware": ["farm_tools", "irrigation_equipment"],
-        "garden_centre": ["fertilizers", "pesticides", "seeds", "organic_treatments"]
+def get_supplier_products(shop_type: str, product_hints: List[str] = None, shop_name: str = "") -> List[str]:
+    """
+    Enhanced product mapping using shop type, extracted hints, and shop name analysis
+    """
+    # Enhanced product mapping with multiple data sources
+    # Enhanced product mapping with multiple data sources
+    # Conservative base product mapping - only assign products when we're confident
+    base_product_mapping = {
+        "agrarian": ["fertilizers", "pesticides", "seeds", "farm tools"],
+        "farm": ["fertilizers", "pesticides", "seeds", "farm tools", "irrigation equipment", "animal feed"],
+        "garden_centre": ["fertilizers", "pesticides", "seeds", "organic treatments", "garden tools"],
+        "hardware": ["farm tools", "irrigation equipment", "general supplies"],
+        "doityourself": ["farm tools", "irrigation equipment", "general supplies"],
+        # Conservative approach: let name/description analysis determine if pharmacy sells agricultural products
+        "pharmacy": [],
+        "chemist": [],
     }
-    
-    return product_mapping.get(shop_type, ["general_agricultural_supplies"])
+
+    # Start with base products for shop type
+    products = base_product_mapping.get(shop_type, []).copy()
+
+    # Only add general agricultural supplies for truly unknown shop types (not pharmacies/chemists)
+    if not products and shop_type not in ["pharmacy", "chemist"]:
+        products = ["general_agricultural_supplies"]
+
+    # Base products assigned
+
+    # Enhance with product hints from OSM data
+    if product_hints:
+        hint_to_product = {
+            "fertilizer": "fertilizers",
+            "pesticide": "pesticides",
+            "seeds": "seeds",
+            "tools": "farm_tools",
+            "irrigation": "irrigation equipment",
+            "animal_feed": "animal feed",
+            "organic": "organic treatments",
+            "greenhouse": "greenhouse supplies",
+            "veterinary": "veterinary supplies",
+        }
+
+        for hint in product_hints:
+            product = hint_to_product.get(hint)
+            if product and product not in products:
+                products.append(product)
+
+    # Analyze shop name for additional product clues
+    if shop_name:
+        name_lower = shop_name.lower()
+
+        # Enhanced name analysis with more specific keywords
+        name_product_mapping = {
+            "fertilizers": ["fertilizer", "fertiliser", "manure", "compost", "npk"],
+            "pesticides": ["pest", "spray", "chemical", "insecticide", "herbicide", "fungicide"],
+            "seeds": ["seed", "nursery", "plant", "seedling"],
+            "irrigation_equipment": ["irrigation", "water", "pump", "sprinkler"],
+            "organic_treatments": ["organic", "bio", "natural", "eco"],
+            "farm_tools": ["tool", "equipment", "machinery", "tractor", "implement"],
+            "animal_feed": ["feed", "livestock", "cattle", "poultry", "fodder"],
+        }
+
+        # Apply name analysis for all shop types
+        for product, keywords in name_product_mapping.items():
+            if any(keyword in name_lower for keyword in keywords):
+                if product not in products:
+                    products.append(product)
+
+        # Special handling for pharmacies - be very conservative
+        if shop_type in ["pharmacy", "chemist"]:
+            # Only keep agricultural products if the name is very specific
+            very_specific_agri_indicators = [
+                "agro", "agricultural", "farm", "veterinary", "vet",
+                "livestock", "animal health", "agri"
+            ]
+
+            # If no specific agricultural indicators, remove agricultural products
+            if not any(indicator in name_lower for indicator in very_specific_agri_indicators):
+                # Remove agricultural products from regular pharmacies
+                products = [p for p in products if p not in ["pesticides", "fungicides", "herbicides", "fertilizers", "seeds"]]
+
+    # Ensure we always have at least some products
+    if not products:
+        products = ["general_agricultural_supplies"]
+
+    # Limit to reasonable number of products (max 6)
+    return products[:6]
 
 
-def get_mock_ghana_suppliers(location: str, lat: float, lon: float) -> List[Supplier]:
-    """Get mock suppliers for Ghana (would be replaced with real database)"""
-    mock_suppliers = [
-        Supplier(
-            name="Yara Ghana Limited",
-            address="Tema Industrial Area, Tema, Ghana",
-            phone="+233-303-211-004",
-            email="info.ghana@yara.com",
-            latitude=5.6698,
-            longitude=-0.0166,
-            distance_km=calculate_distance(lat, lon, 5.6698, -0.0166),
-            products=["fertilizers", "soil_amendments", "crop_nutrition"],
-            rating=4.5,
-            verified=True
-        ),
-        Supplier(
-            name="Chemico Limited",
-            address="Spintex Road, Accra, Ghana",
-            phone="+233-302-815-380",
-            email="info@chemico.com.gh",
-            latitude=5.6037,
-            longitude=-0.1870,
-            distance_km=calculate_distance(lat, lon, 5.6037, -0.1870),
-            products=["pesticides", "fungicides", "herbicides", "insecticides"],
-            rating=4.2,
-            verified=True
-        ),
-        Supplier(
-            name="Dizengoff Ghana Limited",
-            address="East Legon, Accra, Ghana",
-            phone="+233-302-511-379",
-            email="info@dizengoff.com.gh",
-            latitude=5.6500,
-            longitude=-0.1500,
-            distance_km=calculate_distance(lat, lon, 5.6500, -0.1500),
-            products=["irrigation_equipment", "greenhouse_technology", "seeds"],
-            rating=4.3,
-            verified=True
-        ),
-        Supplier(
-            name="Agro-Chemical Association of Ghana",
-            address="Osu, Accra, Ghana",
-            phone="+233-302-761-742",
-            latitude=5.5500,
-            longitude=-0.1800,
-            distance_km=calculate_distance(lat, lon, 5.5500, -0.1800),
-            products=["pesticides", "fungicides", "herbicides", "fertilizers"],
-            rating=4.0,
-            verified=True
-        )
-    ]
-    
-    # Filter suppliers that are within reasonable distance (< 200km)
-    nearby_suppliers = [s for s in mock_suppliers if s.distance_km < 200]
-    
-    return nearby_suppliers
+# Mock suppliers removed - using only real OSM data

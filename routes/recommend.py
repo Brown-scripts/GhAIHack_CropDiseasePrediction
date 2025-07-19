@@ -31,7 +31,7 @@ async def get_comprehensive_recommendations(
         disease_key = disease_name.lower().strip()
 
         # Check cache first
-        cache_key = f"recommend:{disease_key}:{request.user_location}:{request.severity}:{request.organic_preference}:{request.budget_range}"
+        cache_key = f"recommend:{disease_key}:{request.user_location}:{request.severity}:{request.organic_preference}"
         cached_recommendation = await get_cache(cache_key)
         if cached_recommendation:
             logger.info(f"Recommendation retrieved from cache for disease: {disease_name}")
@@ -49,8 +49,7 @@ async def get_comprehensive_recommendations(
         recommended_treatments = treatment_service.recommend_treatments(
             disease_name=disease_key,
             severity=request.severity or SeverityLevel.MODERATE,
-            organic_preference=request.organic_preference,
-            budget_range=request.budget_range
+            organic_preference=request.organic_preference
         )
 
         # Get coordinates for supplier search
@@ -159,8 +158,6 @@ async def get_quick_recommendation(
                 {
                     "name": t.name,
                     "type": t.type.value,
-                    "effectiveness": t.effectiveness,
-                    "cost_estimate_ghs": t.cost_estimate_ghs,
                     "application_method": t.application_method,
                     "dosage": t.dosage
                 }
