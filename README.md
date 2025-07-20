@@ -26,7 +26,7 @@ This API system helps farmers and agricultural professionals in Ghana by:
 - **Location Services**: OpenStreetMap Nominatim & Overpass API
 - **Data Validation**: Pydantic models
 - **Testing**: Pytest with async support
-- **Deployment**: Heroku-ready with Procfile
+- **Deployment**: Deployed on Render
 
 ### Key Components
 
@@ -59,7 +59,7 @@ This API system helps farmers and agricultural professionals in Ghana by:
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.11 or higher
+- Python 3.11.9 (specified in `.python-version` file)
 - Git
 
 ### Installation
@@ -230,21 +230,26 @@ LOG_FORMAT=json
 
 ## 🚀 Deployment
 
-### Heroku Deployment
-The project is Heroku-ready with included `Procfile`:
+### Render Deployment
+The project is deployed on Render with the following configuration:
 
+**Build Command:**
 ```bash
-# Login to Heroku
-heroku login
-
-# Create app
-heroku create your-app-name
-
-
-
-# Deploy
-git push heroku main
+pip install -r requirements.txt
 ```
+
+**Start Command:**
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+**Python Version:** Specified in `.python-version` file (3.11.9)
+
+**Deployment Steps:**
+1. Connect your GitHub repository to Render
+2. Create a new Web Service
+3. Set the build and start commands above
+4. Deploy automatically on git push
 
 ### Docker Deployment
 ```dockerfile
@@ -276,7 +281,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Ghana's Ministry of Agriculture for disease classification standards
 - OpenStreetMap community for location data
-- Agricultural extension officers who provided domain expertise
 - GhAI Hackathon organizers and participants
 
 ## 📞 Support
